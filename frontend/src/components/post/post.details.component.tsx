@@ -14,6 +14,8 @@ import { getUserInfo } from "../../services/auth.service";
 import { useToggleReactionMutation } from "../../redux/apis/reaction.api";
 import { toast } from "react-hot-toast";
 
+import BookmarkButton from "../BookmarkButton";
+
 const PostDetailsComponent = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -94,7 +96,7 @@ const PostDetailsComponent = () => {
             </div>
 
             <div className="flex items-center justify-between border-t border-b border-gray-500 py-4 mb-12">
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-6">
                 <button 
                   onClick={handleLike}
                   className={`flex items-center space-x-2 transition-colors cursor-pointer ${
@@ -106,6 +108,13 @@ const PostDetailsComponent = () => {
                   <i className={`${post?.reactions?.some((r: any) => r.userId?.email === currentUser?.email) ? 'fas' : 'far'} fa-heart`}></i>
                   <span>{post?.likesCount}</span>
                 </button>
+                {post && (
+                  <BookmarkButton
+                    storyId={post._id}
+                    bookmarks={post.bookmarks}
+                    className="!border-none !px-0 bg-transparent hover:bg-transparent"
+                  />
+                )}
               </div>
               <div className="flex items-center space-x-4">
                 <button className="text-gray-600 hover:text-custom">

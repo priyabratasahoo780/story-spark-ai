@@ -57,7 +57,10 @@ const NavListComponent: React.FC = () => {
             <Link to="/explore" className="text-gray-400 hover:text-custom transition">EXPLORE</Link>
             <Link to="/community" className="text-gray-400 hover:text-custom transition">COMMUNITY</Link>
             {isLogin && (
-              <Link to="/dashboard" className="text-gray-400 hover:text-custom transition">DASHBOARD</Link>
+              <>
+                <Link to="/bookmarks" className="text-gray-400 hover:text-custom transition">SAVED STORIES</Link>
+                <Link to="/dashboard" className="text-gray-400 hover:text-custom transition">DASHBOARD</Link>
+              </>
             )}
           </div>
         </div>
@@ -116,7 +119,10 @@ const NavListComponent: React.FC = () => {
           <Link to="/explore" className="text-gray-400 hover:text-white py-2">EXPLORE</Link>
           <Link to="/community" className="text-gray-400 hover:text-white py-2">COMMUNITY</Link>
           {isLogin && (
-            <Link to="/dashboard" className="text-gray-400 hover:text-white py-2">DASHBOARD</Link>
+            <>
+              <Link to="/bookmarks" className="text-gray-400 hover:text-white py-2">SAVED STORIES</Link>
+              <Link to="/dashboard" className="text-gray-400 hover:text-white py-2">DASHBOARD</Link>
+            </>
           )}
           <button type="button" className="text-left text-gray-400 py-2" data-notification-trigger="true" onClick={toggle}>
             NOTIFICATIONS {unreadCount > 0 && `(${unreadCount})`}

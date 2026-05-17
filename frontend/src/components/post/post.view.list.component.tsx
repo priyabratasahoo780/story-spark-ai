@@ -6,6 +6,8 @@ import { useToggleReactionMutation } from "../../redux/apis/reaction.api";
 import { toast } from "react-hot-toast";
 import { getUserInfo } from "../../services/auth.service";
 
+import BookmarkButton from "../BookmarkButton";
+
 interface IExploreViewListComponentProps {
   posts: Post[];
   isLoading: boolean;
@@ -71,9 +73,7 @@ const ExploreViewListComponent: React.FC<IExploreViewListComponentProps> = ({
                     <i className="far fa-comment"></i>
                     <span>{story.commentsCount || 0}</span>
                   </button>
-                  <button className="ml-auto !rounded-button flex items-center space-x-1 hover:text-gray-400 border px-3 py-1">
-                    <i className="far fa-bookmark"></i>
-                  </button>
+                  <BookmarkButton storyId={story._id as string} bookmarks={story.bookmarks} className="ml-auto" />
                 </div>
               </div>
             </div>
