@@ -69,7 +69,7 @@ useEffect(() => {
   };
 
   autoSaveStory();
-}, [selectedStory, isLogin, selectTopics]);
+}, [selectedStory, isLogin, selectTopics, createPost]);
 
   const handelStorySelection = (story: IStories) => {
     setSelectedStory(story);

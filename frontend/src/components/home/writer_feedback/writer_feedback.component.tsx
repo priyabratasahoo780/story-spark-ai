@@ -1,5 +1,6 @@
 import React from "react";
 import { useGetReviewsQuery } from "../../../redux/apis/review.api";
+import { Review } from "../../../models/review";
 
 const WriterFeedbackComponent = () => {
   const { data: feedbackData = [], isLoading } =
@@ -27,7 +28,7 @@ const WriterFeedbackComponent = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {feedbackData.map((writer: any, index: number) => (
+          {feedbackData.map((writer: Review, index: number) => (
             <div
               key={index}
               className="bg-blue-500/10 p-6 rounded-xl transform transition-transform hover:scale-105"

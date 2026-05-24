@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { useParams } from "react-router-dom";
 import {
   useGetPostByIdQuery,
@@ -45,7 +45,7 @@ const PostDetailsComponent = () => {
     if (!authorId) return;
     try {
       await toggleFollow(authorId).unwrap();
-    } catch (error) {
+    } catch {
       toast.error("Failed to update follow status");
     }
   };
@@ -59,6 +59,15 @@ const PostDetailsComponent = () => {
       toast.error("You need to login to perform this action");
     }
   };
+
+  const hasUserReacted = post?.reactions?.some((r) => {
+    const userId = r.userId;
+    const email =
+      typeof userId === "object" && userId !== null && "email" in userId
+        ? userId.email
+        : undefined;
+    return email === currentUser?.email;
+  });
 
   if (isLoading) {
     return <LoadingAnimation />;
@@ -130,20 +139,14 @@ const PostDetailsComponent = () => {
                 <button
                   onClick={handleLike}
                   className={`flex items-center space-x-2 transition-colors cursor-pointer ${
-                    post?.reactions?.some(
-                      (r: any) => r.userId?.email === currentUser?.email
-                    )
+                    hasUserReacted
                       ? "text-red-500 hover:text-red-400"
                       : "text-gray-600 hover:text-gray-400"
                   }`}
                 >
                   <i
                     className={`${
-                      post?.reactions?.some(
-                        (r: any) => r.userId?.email === currentUser?.email
-                      )
-                        ? "fas"
-                        : "far"
+                      hasUserReacted ? "fas" : "far"
                     } fa-heart`}
                   ></i>
                   <span>{post?.likesCount}</span>

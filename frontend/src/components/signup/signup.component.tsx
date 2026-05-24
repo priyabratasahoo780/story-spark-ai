@@ -58,7 +58,6 @@ const SignUpComponent = () => {
   const [showOtpField, setShowOtpField] = useState<boolean>(false);
   const [registerInfo, setRegisterInfo] = useState<IRegisterInfo>();
   const [expiredAt, setExpiredAt] = useState(0);
-  const [verificationToken, setVerificationToken] = useState<string>("");
 
   const password = watch("password");
   const confirmPassword = watch("confirmPassword");
@@ -129,8 +128,6 @@ const SignUpComponent = () => {
       }).unwrap();
 
       if (otpResponse?.data?.verificationToken) {
-        setVerificationToken(otpResponse.data.verificationToken);
-
         const res = await registerUser({
           ...registerInfo,
           verificationToken: otpResponse.data.verificationToken,
