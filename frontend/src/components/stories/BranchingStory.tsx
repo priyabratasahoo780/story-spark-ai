@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
 import ChoiceButtons from "./ChoiceButtons";
@@ -43,7 +43,7 @@ const BranchingStory = () => {
     [history]
   );
 
-  const loadStory = async (selectedChoice: string, storyContext = fullContext) => {
+  const loadStory = useCallback(async (selectedChoice: string, storyContext = fullContext) => {
     setLoading(true);
 
     try {
@@ -65,11 +65,11 @@ const BranchingStory = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [createBranchingStory, fullContext, genre, history.length]);
 
   useEffect(() => {
     void loadStory("");
-  }, []);
+  }, [loadStory]);
 
   const handleSelectChoice = async (choice: string) => {
     if (!currentStory || loading) {

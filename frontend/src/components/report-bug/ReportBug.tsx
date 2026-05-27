@@ -69,7 +69,7 @@ const ReportBug = () => {
       
       // Scroll to top of form or success message
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (error) {
+    } catch {
       toast.error("Failed to submit report. Please try again.");
     } finally {
       setIsSubmitting(false);
