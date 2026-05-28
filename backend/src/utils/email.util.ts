@@ -48,8 +48,10 @@ export const sendVerificationEmail = async (to: string, token: string) => {
 };
 
 export const sendContactEmail = async (data: {
-  fullname: string;
-  email: string;
+  fullname?: string;
+  name?: string;
+  email?: string;
+  feedbackType?: "bug" | "feature" | "feedback" | "general";
   subject: string;
   message: string;
 }) => {
@@ -66,20 +68,34 @@ export const sendContactEmail = async (data: {
     },
   });
 
+  const senderName = data.fullname?.trim() || data.name?.trim() || "Anonymous";
+  const senderEmail = data.email?.trim();
+  const feedbackType = data.feedbackType || "general";
+  const feedbackLabel =
+    feedbackType === "bug"
+      ? "Bug report"
+      : feedbackType === "feature"
+        ? "Feature request"
+        : feedbackType === "feedback"
+          ? "General feedback"
+          : "Support request";
+
   const mailOptions = {
-    from: `"${data.fullname}" <${data.email}>`,
+    from: `"Story Spark AI Support" <${config.verify_email}>`,
+    replyTo: senderEmail || undefined,
     to: config.verify_email,
-    subject: `Contact Form: ${data.subject}`,
+    subject: `[${feedbackLabel}] ${data.subject}`,
     html: `
       <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-        <h2>New Contact Form Submission</h2>
-        <p><strong>From:</strong> ${data.fullname} (${data.email})</p>
+        <h2>New Support / Feedback Submission</h2>
+        <p><strong>Type:</strong> ${feedbackLabel}</p>
+        <p><strong>From:</strong> ${senderName}${senderEmail ? ` (${senderEmail})` : ""}</p>
         <p><strong>Subject:</strong> ${data.subject}</p>
         <hr style="border: none; border-top: 1px solid #eaeaea; margin: 20px 0;" />
         <p><strong>Message:</strong></p>
         <p style="white-space: pre-wrap;">${data.message}</p>
         <hr style="border: none; border-top: 1px solid #eaeaea; margin: 20px 0;" />
-        <p style="color: #888; font-size: 12px;">This email was sent from the Story Spark AI Contact Form.</p>
+        <p style="color: #888; font-size: 12px;">This email was sent from the Story Spark AI support form.</p>
       </div>
     `,
   };

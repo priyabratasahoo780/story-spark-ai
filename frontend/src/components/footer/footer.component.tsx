@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import logo from "../../assets/logoNew.png";
+import SupportFeedbackModal from "./support-feedback-modal";
 
 const DEFAULT_GITHUB_ISSUES_URL = "https://github.com/ronisarkarexe/story-spark-ai/issues";
 
@@ -8,6 +9,7 @@ const FooterComponent = () => {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +60,8 @@ const FooterComponent = () => {
     { label: "Community",    to: "/community"   },
     { label: "Guidelines",   to: "/guidelines"  },
     { label: "Contributors", to: "/contributors"},
-    { label: "Report Bug",   to: githubIssuesUrl },
+    { label: "Feedback", action: () => setIsSupportModalOpen(true) },
+    { label: "GitHub Issues", to: githubIssuesUrl },
   ];
 
 
@@ -161,15 +164,24 @@ const FooterComponent = () => {
           <div className="col-span-6 md:col-span-2 flex flex-col gap-4">
             <h3 className="text-[11.5px] font-bold tracking-[0.22em] uppercase text-white/70">Resources</h3>
             <ul className="flex flex-col gap-[12.5px]">
-              {resourceLinks.map(({ label, to }) => (
-                <li key={to}>
-                  {to && to.startsWith("http") ? (
+              {resourceLinks.map(({ label, to, action }) => (
+                <li key={label}>
+                  {action ? (
+                    <button
+                      type="button"
+                      onClick={action}
+                      className="group relative inline-flex text-[14px] leading-none text-slate-300/85 transition-colors duration-200 hover:text-blue-300"
+                    >
+                      {label}
+                      <span className="absolute -bottom-0.5 left-0 h-px w-0 bg-blue-400/40 transition-all duration-300 ease-out group-hover:w-full" />
+                    </button>
+                  ) : to && to.startsWith("http") ? (
                     <a href={to} target="_blank" rel="noopener noreferrer" className="group relative inline-flex text-[14px] leading-none text-slate-300/85 transition-colors duration-200 hover:text-blue-300">
                       {label}
                       <span className="absolute -bottom-0.5 left-0 h-px w-0 bg-blue-400/40 transition-all duration-300 ease-out group-hover:w-full" />
                     </a>
                   ) : (
-                    <Link to={to} className="group relative inline-flex text-[14px] leading-none text-slate-300/85 transition-colors duration-200 hover:text-blue-300">
+                    <Link to={to || "/"} className="group relative inline-flex text-[14px] leading-none text-slate-300/85 transition-colors duration-200 hover:text-blue-300">
                       {label}
                       <span className="absolute -bottom-0.5 left-0 h-px w-0 bg-blue-400/40 transition-all duration-300 ease-out group-hover:w-full" />
                     </Link>
@@ -273,6 +285,7 @@ const FooterComponent = () => {
 
         </div>
         </div>
+      <SupportFeedbackModal isOpen={isSupportModalOpen} onClose={() => setIsSupportModalOpen(false)} />
 </footer>
   );
 };
