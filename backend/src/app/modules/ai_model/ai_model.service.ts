@@ -8,10 +8,14 @@ import {
 import {
   IAIModel,
   IAlternateEndingPayload,
+  IRemixPayload,
+  ITranslatePayload,
 } from "./ai_model.interface";
 import {
   generateAlternateEndingsWithGemini,
   generateWithGeminiStories,
+  generateRemixWithGemini,
+  translateStoryWithGemini,
 } from "./ai_model.utils";
 import { assertSuccessfulGeneration } from "./quota.lifecycle";
 
@@ -32,7 +36,7 @@ const normalizeStoryPayload = (payload: IAIModel) => ({
   wordLength: payload.wordLength ?? 250,
   numStories: payload.numStories ?? 2,
   language: payload.language ?? "English",
-  tone: payload.tone ?? undefined, // NEW: pass tone through, undefined if not provided
+  tone: payload.tone ?? undefined,
 });
 
 const mapGenerationError = (error: unknown, message: string): never => {
@@ -51,6 +55,8 @@ const mapGenerationError = (error: unknown, message: string): never => {
   throw new ApiError(httpStatus.BAD_GATEWAY, `${message} (${errorMsg})`);
 };
 
+// Bug fix 1: quota.lifecycle owns rollback — no manual User.updateOne needed.
+// Bug fix 2: _token kept as unused param (quota handled upstream by middleware).
 const aiModelGenerate = async (payload: IAIModel, _token: ITokenPayload) => {
   const { prompt, wordLength, numStories, language, tone } =
     normalizeStoryPayload(payload);
@@ -64,7 +70,7 @@ const aiModelGenerate = async (payload: IAIModel, _token: ITokenPayload) => {
           numStories,
           language,
           signal,
-          tone, // NEW: pass tone to utils
+          tone,
         ),
       AUTHENTICATED_GENERATION_TIMEOUT_MS
     );
@@ -88,7 +94,7 @@ const aiFreeModelGenerate = async (payload: IAIModel) => {
           numStories,
           language,
           signal,
-          tone, // NEW: pass tone to utils
+          tone,
         ),
       FREE_GENERATION_TIMEOUT_MS
     );
@@ -99,6 +105,8 @@ const aiFreeModelGenerate = async (payload: IAIModel) => {
   }
 };
 
+// Bug fix 3: migrated from old inline quota pattern to quota.lifecycle,
+// consistent with aiModelGenerate and all other authenticated functions.
 const aiModelAlternateEndings = async (
   payload: IAlternateEndingPayload,
   _token: ITokenPayload
@@ -132,9 +140,65 @@ const aiFreeModelAlternateEndings = async (payload: IAlternateEndingPayload) => 
   }
 };
 
+const aiModelRemix = async (payload: IRemixPayload, _token: ITokenPayload) => {
+  const { title, content, tag, remixType, remixOption = "", language = "English" } = payload;
+  try {
+    const result = await raceGenerationWithTimeout(
+      () => generateRemixWithGemini(title, content, tag, remixType, remixOption, language),
+      AUTHENTICATED_GENERATION_TIMEOUT_MS
+    );
+    return result;
+  } catch (error) {
+    mapGenerationError(error, "Remix generation failed.");
+  }
+};
+
+const aiFreeModelRemix = async (payload: IRemixPayload) => {
+  const { title, content, tag, remixType, remixOption = "", language = "English" } = payload;
+  try {
+    const result = await raceGenerationWithTimeout(
+      () => generateRemixWithGemini(title, content, tag, remixType, remixOption, language),
+      FREE_GENERATION_TIMEOUT_MS
+    );
+    return result;
+  } catch (error) {
+    mapGenerationError(error, "Remix generation failed.");
+  }
+};
+
+const aiModelTranslate = async (payload: ITranslatePayload, _token: ITokenPayload) => {
+  const { title, content, targetLanguage } = payload;
+  try {
+    const result = await raceGenerationWithTimeout(
+      () => translateStoryWithGemini(title, content, targetLanguage),
+      AUTHENTICATED_GENERATION_TIMEOUT_MS
+    );
+    return result;
+  } catch (error) {
+    mapGenerationError(error, "Translation failed.");
+  }
+};
+
+const aiFreeModelTranslate = async (payload: ITranslatePayload) => {
+  const { title, content, targetLanguage } = payload;
+  try {
+    const result = await raceGenerationWithTimeout(
+      () => translateStoryWithGemini(title, content, targetLanguage),
+      FREE_GENERATION_TIMEOUT_MS
+    );
+    return result;
+  } catch (error) {
+    mapGenerationError(error, "Translation failed.");
+  }
+};
+
 export const AiModelService = {
   aiModelGenerate,
   aiFreeModelGenerate,
   aiModelAlternateEndings,
   aiFreeModelAlternateEndings,
+  aiModelRemix,
+  aiFreeModelRemix,
+  aiModelTranslate,
+  aiFreeModelTranslate,
 };
