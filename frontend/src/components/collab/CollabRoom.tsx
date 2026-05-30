@@ -51,36 +51,40 @@ export default function CollabRoom() {
       }
 
       // Connect to collab namespace
-      const collabSocket = socket.io.of("/collab");
+      const collabSocket = socket;
 
       // Request room info
-      collabSocket.emit("collab:get_room", { roomId }, (response: any) => {
-        if (response && response.room) {
-          setRoom(response.room);
-          setError(null);
-        } else {
-          setError("Room not found");
-        }
-        setLoading(false);
-      });
+    collabSocket.emit(
+  "collab:get_room",
+  { roomId },
+  (response: Record<string, unknown>) => {
+    if (response && response["room"]) {
+      setRoom(response["room"] as Room);
+      setError(null);
+    } else {
+      setError("Room not found");
+    }
+    setLoading(false);
+  }
+);
 
       // Listen for room updates
-      const handleRoomUpdated = (data: any) => {
-        if (data && data.room) {
-          setRoom(data.room);
+      const handleRoomUpdated = (data: Record<string, unknown>) => {
+        if (data && data["room"]) {
+          setRoom(data["room"] as Room);
         }
       };
 
-      const handleStoryUpdated = (data: any) => {
-        if (data && data.story) {
-          setRoom((prev) => (prev ? { ...prev, story: data.story } : null));
+      const handleStoryUpdated = (data: Record<string, unknown>) => {
+        if (data && data["story"]) {
+          setRoom((prev) => (prev ? { ...prev, story: data["story"] as StoryChunk[] } : null));
         }
       };
 
       collabSocket.on("collab:room_updated", handleRoomUpdated);
       collabSocket.on("collab:story_updated", handleStoryUpdated);
-      collabSocket.on("collab:error", (data: any) => {
-        setError(data.message);
+      collabSocket.on("collab:error", (data: Record<string, unknown>) => {
+        setError(data["message"] as string);
         setLoading(false);
       });
 
@@ -100,7 +104,7 @@ export default function CollabRoom() {
 
     const socket = getSocketIo();
     if (socket) {
-      socket.io.of("/collab").emit("collab:add_text", {
+      socket.emit("collab:add_text", {
         roomId,
         userId: user.userId,
         text: newText,
@@ -112,7 +116,7 @@ export default function CollabRoom() {
   const handleAIContinue = () => {
     const socket = getSocketIo();
     if (socket) {
-      socket.io.of("/collab").emit("collab:ai_continue", { roomId });
+      socket.emit("collab:ai_continue", { roomId });
     }
   };
 

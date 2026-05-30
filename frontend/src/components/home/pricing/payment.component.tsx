@@ -54,7 +54,7 @@ const PaymentComponent = () => {
         description: `${planName} Subscription`,
         order_id: data.order.id,
 
-        handler: async (response: any) => {
+        handler: async (response: unknown) => {
           try {
             // Verify payment
             const verifyRes = await fetch("/api/v1/payment/verify", {
@@ -89,9 +89,9 @@ const PaymentComponent = () => {
         },
       };
 
-      const paymentObject = new (window as any).Razorpay(options);
+      const paymentObject = new  (window as unknown ).Razorpay(options);
 
-      paymentObject.on("payment.failed", function (response: any) {
+      paymentObject.on("payment.failed", function (response:Record<string, unknown>) {
         console.error(response.error);
         alert("Payment failed.");
       });
@@ -222,7 +222,7 @@ const PaymentComponent = () => {
 
                 <li className="flex items-center gap-2">
                   <CheckCircle2 size={16} className="text-cyan-300" />
-                  Cancel anytime from your account settings
+                  Cancel unknowntime from your account settings
                 </li>
               </ul>
             </div>
