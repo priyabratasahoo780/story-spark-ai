@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-
+import AnimatedBook from "../hero/AnimatedBook";
 // Register the GSAP plugin
 gsap.registerPlugin(useGSAP);
 
@@ -270,10 +270,12 @@ const HeroSectionComponent = () => {
 
       <HeroParticles />
 
-      <div className="relative overflow-hidden" onMouseMove={handleMouseMove}>
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-20 text-center">
-          <div
-            ref={badgeRef}
+   
+     <div className="relative overflow-hidden" onMouseMove={handleMouseMove}>
+<div className="text-center lg:text-left"></div>
+<div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-20">          <div
+   
+   ref={badgeRef}
             className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-white/80 dark:bg-slate-800/60 border border-blue-400/30 dark:border-blue-500/30 backdrop-blur-md mb-8 shadow-sm cursor-pointer transition-all duration-300"
           >
             <span className="relative flex h-2.5 w-2.5">
@@ -282,21 +284,25 @@ const HeroSectionComponent = () => {
             </span>
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 tracking-wide">StorySparkAI v2.0 is live</span>
           </div>
-
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-8 leading-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+<div className="grid lg:grid-cols-2 gap-12 items-center">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 leading-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
             Ignite Your Imagination With <br className="hidden sm:block" />
             <span className="hero-gradient-text pb-2">
               AI-Driven Storytelling
             </span>
           </h1>
-
-          <p className="max-w-2xl mx-auto text-lg sm:text-xl text-slate-600 dark:text-slate-400 leading-relaxed mb-10 transition-colors duration-300">
+<div className="flex justify-center lg:justify-end">
+  <AnimatedBook />
+</div>
+          <p className="max-w-2xl lg:mx-0 mx-auto text-lg sm:text-xl text-slate-600 dark:text-slate-400 leading-relaxed mb-10 transition-colors duration-300">
             Create, edit, and generate engaging multiple story variations from a single prompt.
             Perfect for writers, creators, and enthusiasts exploring the future of fiction.
           </p>
+          
           <div className="flex-grow flex flex-col items-center justify-center">
             <div className="relative max-w-3xl w-full before:absolute before:inset-0 before:-z-10 before:bg-gradient-to-r before:from-purple-500/20 before:via-indigo-500/20 before:to-blue-500/20 before:blur-xl before:animate-pulse">
               <div className="flex flex-wrap items-center justify-center gap-4">
+                
                 <Link to="/stories">
                   <button className="relative px-8 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-blue-500/25 dark:shadow-indigo-500/15 hover:shadow-xl hover:shadow-blue-500/30 hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 flex items-center justify-center gap-2.5 cursor-pointer">
                     <i className="fa fa-wand-magic-sparkles"></i>
@@ -309,11 +315,13 @@ const HeroSectionComponent = () => {
                     <span>Collab Mode</span>
                   </button>
                 </Link>
+                
               </div>
             </div>
           </div>
         </div>
 
+</div>
         <div className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
           <div className="hero-cursor-stars absolute inset-0" aria-hidden="true">
             {stars.map((star) => (
