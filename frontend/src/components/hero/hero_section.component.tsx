@@ -20,15 +20,14 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { 
-    opacity: 1, 
-    y: 0, 
-    transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } 
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const },
   },
 };
 
 const features = [
-// ... (rest of the features array remains the same)
   {
     title: "Infinite Variations",
     description: "Generate multiple unique branches of your story from a single starting prompt. Explore every creative possibility.",
@@ -333,9 +332,10 @@ const HeroSectionComponent = () => {
                 </Link>
               </div>
             </div>
-          </motion.div>
+</div>
+</motion.div>
 
-        <div className="absolute inset-0 -z-10 pointer-events-none overflow-hidden select-none">
+<div className="absolute inset-0 -z-10 pointer-events-none overflow-hidden select-none">
           <div className="hero-cursor-stars absolute inset-0" aria-hidden="true">
             {stars.map((star) => (
               <span
@@ -346,8 +346,7 @@ const HeroSectionComponent = () => {
             ))}
           </div>
         </div>
-        </div>
-
+        
       <motion.div variants={itemVariants} className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 sm:pb-28 w-full box-border">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6 lg:gap-8 w-full box-border">
           {features.map((feature, index) => (
@@ -355,6 +354,7 @@ const HeroSectionComponent = () => {
           ))}
         </div>
       </motion.div>
+    </div>
     </motion.div>
   );
 };

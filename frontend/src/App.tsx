@@ -45,13 +45,8 @@ import PublishedStoriesComponent from "./components/dashboard/posts/published_st
 import ReportBug from "./components/report-bug/ReportBug";
 import ResourceDetailComponent from "./components/community/resource_detail.component";
 import ResourcesListComponent from "./components/community/resources_list.component";
-import ScrollToTopButton from "./components/ScrollToTopButton";
 import SettingComponent from "./components/dashboard/settings/settings.component";
 import SignUpComponent from "./components/signup/signup.component";
-import SimpleProtectedRoute from "./components/ProtectedRoute";
-import StoriesComponent from "./components/stories/stories.component";
-import StoryWorkspace from "./components/story/StoryWorkspace";
-import TemplatesComponent from "./components/templates/templates.component";
 import Terms from "./components/footer/terms.tsx";
 import UserComponent from "./components/dashboard/users/user.component";
 import WriterApplicationComponent from "./components/dashboard/writers/writer_application.component";
@@ -76,6 +71,8 @@ const ProtectedRoute = ({ allowedRoles, element }: ProtectedRouteProps) => {
 
 const ALL_ROLES = [USER_ROLE.ADMIN, USER_ROLE.SUPER_ADMIN, USER_ROLE.WRITER, USER_ROLE.USER];
 const ELEVATED_ADMIN_ROLES = [USER_ROLE.ADMIN, USER_ROLE.SUPER_ADMIN];
+const PaymentComponentWrapper = PaymentComponent as React.ComponentType<any>;
+const ContributorsComponentTyped = ContributorsComponent as React.ComponentType<any>;
 
 const router = createBrowserRouter([
   {
@@ -109,7 +106,7 @@ const router = createBrowserRouter([
       { path: "terms", element: <Terms /> },
       { path: "help-center", element: <HelpCenterComponent /> },
       { path: "guidelines", element: <GuidelinesComponent /> },
-      { path: "contributors", element: <ContributorsComponent /> },
+      { path: "contributors", element: <ContributorsComponentTyped /> },
       { path: "community", element: <CommunityComponent /> },
       { path: "report-bug", element: <ReportBug /> },
 
@@ -159,7 +156,7 @@ const router = createBrowserRouter([
   {
     element: <ProtectedRoute allowedRoles={ALL_ROLES} />,
     children: [
-      { path: "/payment", element: <PaymentComponent /> },
+      { path: "/payment", element: <PaymentComponentWrapper /> },
       { path: "/collab", element: <CollabHome /> },
       { path: "/collab/:roomId", element: <CollabRoom /> },
     ],

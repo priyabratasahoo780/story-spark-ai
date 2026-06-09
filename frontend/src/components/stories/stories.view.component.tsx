@@ -143,6 +143,7 @@ export interface IStories {
   language?: string;
   emotions?: string[];
   enhancedPrompt?: string;
+  genre?: string;
 }
 
 interface IPost extends IStories {
@@ -155,6 +156,7 @@ interface StoriesComponentProps {
   isLogin: boolean;
   setStories: (stories: IStories[]) => void;
   onPublishSuccess?: () => void;
+  isLoading?: boolean;
 }
 
 interface IRelatedStoriesComponentProps {
@@ -308,7 +310,8 @@ const StoriesViewComponent: React.FC<StoriesComponentProps> = ({
   stories,
   isLogin,
   setStories,
-  onPublishSuccess
+  onPublishSuccess,
+  isLoading
 }) => {
   const location = useLocation();
   const dispatch = useDispatch();
@@ -338,7 +341,6 @@ const StoriesViewComponent: React.FC<StoriesComponentProps> = ({
   const [newTopicTitle, setNewTopicTitle] = useState<string>("");
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false); // Used for initial generative state
 
   // Modals
   const [showContinueModal, setShowContinueModal] = useState<boolean>(false);

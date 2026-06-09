@@ -394,6 +394,16 @@ interface ICharacter {
   personality: string;
 }
 
+const getUniqueStories = (stories: IStories[]): IStories[] => {
+  const seen = new Set<string>();
+  return (stories || []).filter((story) => {
+    if (!story || !story.uuid) return false;
+    if (seen.has(story.uuid)) return false;
+    seen.add(story.uuid);
+    return true;
+  });
+};
+
 const StoriesComponent = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const storiesPerPage = 10;

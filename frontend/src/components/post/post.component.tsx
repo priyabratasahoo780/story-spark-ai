@@ -6,7 +6,7 @@ import { useGetPostListsQuery, useGetGenresQuery } from "../../redux/apis/post.a
 import type { Post } from "../../models/post";
 import { useDebounced } from "../../hooks/global";
 
-const ExploreComponent = () => {
+export const ExploreComponent = () => {
   const [sortBy, setSortBy] = useState<string>("createdAt");
   const [sortOrder, setSortOrder] = useState<string>("desc");
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -169,7 +169,11 @@ const ExploreComponent = () => {
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-
+                }}
+              />
+            </div>
+          </div>
+        </div>
 
         {/* Main Layout */}
         <div className="flex flex-col md:flex-row gap-8">

@@ -42,7 +42,7 @@ interface RazorpayWindow extends Window {
   Razorpay: new (options: object) => RazorpayInstance;
 }
 
-const PaymentComponent = () => {
+export const PaymentComponent = () => {
   const navigate = useNavigate();
 
   // Read selected plan from pricing page
@@ -142,7 +142,7 @@ const PaymentComponent = () => {
       console.error(error);
       alert("Something went wrong.");
     }
-  const planPrice = searchParams.get("price") || "19.99";
+  };
 
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -440,3 +440,4 @@ const PaymentComponent = () => {
 };
 
 export default PaymentComponent;
+

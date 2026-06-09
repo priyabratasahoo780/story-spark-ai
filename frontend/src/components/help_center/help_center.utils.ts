@@ -119,7 +119,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
 ];
 
 // CORRECTED MAPPING: Changed 'title' to 'label' so the sidebar reads it correctly
-export const HELP_SECTIONS = HELP_CATEGORIES.map(category => ({
+export const HELP_CATEGORY_SECTIONS = HELP_CATEGORIES.map(category => ({
   id: category.sectionId,
   label: category.title,
   icon: category.icon
