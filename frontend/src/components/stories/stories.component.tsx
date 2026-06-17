@@ -462,6 +462,8 @@ interface ICharacter {
   personality: string;
 }
 
+const DRAFT_KEY = "story_spark_draft";
+
 const StoriesComponent = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const storiesPerPage = 10;
@@ -471,7 +473,7 @@ const StoriesComponent = () => {
 
   const draft = useMemo(() => {
     try {
-      const saved = localStorage.getItem("story_spark_draft");
+      const saved = localStorage.getItem(DRAFT_KEY);
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -479,12 +481,11 @@ const StoriesComponent = () => {
   }, []);
 
   const [stories, setStories] = useState<IStories[]>(
-    draft?.stories?.length ? getUniqueStories(draft.stories) : [{uuid:"test-1",title:"The Wizard's Journey",content:"Merlin walked through the forest toward the castle. The village was far behind him. He crossed the bridge over the river and entered the dungeon beneath the tower. Dragons guarded the mountain beyond the valley. Elena watched from the palace window as Merlin approached the cave near the ocean shore.",tag:"Fantasy",imageURL:""}]
     draft?.stories?.length ? getUniqueStories(draft.stories) : []
   );
   
   const [loading, setLoading] = useState<boolean>(false);
-  const [validationError, setValidationError] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchFilter, setSearchFilter] = useState<string>("all");
 
@@ -563,8 +564,7 @@ useEffect(() => {
   const [selectedGenre, setSelectedGenre] = useState<string>("");
   const [selectedLength, setSelectedLength] = useState<string>("medium");
   const [textareaValue, setTextareaValue] = useState<string>("");
-  const DRAFT_KEY = "storyspark_story_draft_v1";
-  const [draftStatus, setDraftStatus] = useState("");
+
   
   const [selectedGenre, setSelectedGenre] = useState<string>(
     draft?.genre
@@ -627,6 +627,7 @@ useEffect(() => {
   );
   const [showLimitModal, setShowLimitModal] = useState<boolean>(false);
   const [isRecentPromptsOpen, setIsRecentPromptsOpen] = useState<boolean>(false);
+  const [isHighLatency, setIsHighLatency] = useState<boolean>(false);
   const { recentPrompts, addPrompt, removePrompt, clearAll } = useRecentPrompts();
   
   const text = UI_TEXT[selectedLanguage] ?? UI_TEXT.English;
@@ -668,7 +669,7 @@ useEffect(() => {
         tone: selectedTone,
       };
       try {
-        localStorage.setItem("story_spark_draft", JSON.stringify(draftData));
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
       } catch (err) {
         if (err instanceof DOMException && err.name === "QuotaExceededError") {
           toast.error("Couldn't autosave draft â€” storage limit reached.");
@@ -819,8 +820,10 @@ useEffect(() => {
 
     isGenerationInProgressRef.current = true;
     setLoading(true);
+    setIsHighLatency(false);
 
     let timeoutId: NodeJS.Timeout | null = null;
+    let latencyTimeoutId: NodeJS.Timeout | null = null;
 
     try {
       // 60-second client-side request timeout safeguard
@@ -830,6 +833,13 @@ useEffect(() => {
           handleCancelGeneration(true);
         }
       }, 60000);
+
+      // 10-second high latency warning (for fallback/backoff cases)
+      latencyTimeoutId = setTimeout(() => {
+        if (isGenerationInProgressRef.current) {
+          setIsHighLatency(true);
+        }
+      }, 10000);
 
       const payload = {
         prompt: selectedGenre
@@ -858,10 +868,6 @@ useEffect(() => {
         setSelectedPrompt("");
         setValue("prompt", "");
         // Clear draft after successful generation
-        localStorage.removeItem("story_spark_draft");
-        if (selectedGenre) {
-          playSoundtrack(selectedGenre);
-        }
         localStorage.removeItem(DRAFT_KEY);
         setDraftStatus("");
         reset();
@@ -887,9 +893,13 @@ useEffect(() => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
+      if (latencyTimeoutId) {
+        clearTimeout(latencyTimeoutId);
+      }
       activeGenerationRef.current = null;
       isGenerationInProgressRef.current = false;
       setLoading(false);
+      setIsHighLatency(false);
     }
   }, [
     login,
@@ -1859,7 +1869,7 @@ useEffect(() => {
         </div>
       )}
 
-      {loading && <StoryGeneratingAnimation onCancel={handleCancelGeneration} />}
+      {loading && <StoryGeneratingAnimation onCancel={handleCancelGeneration} isHighLatency={isHighLatency} />}
 
       {/* Search UI */}
       {stories.length > 0 && (
