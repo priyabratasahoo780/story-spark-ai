@@ -66,23 +66,27 @@
 
    ```bash
    git clone https://github.com/<your-github-username>/story-spark-ai.git
+   ```
+2. **Navigate to the project directory**
+
+   ```bash
    cd story-spark-ai
    ```
 
-2. **Install dependencies** (single install at the repo root — npm workspaces)
+3. **Install dependencies** (single install at the repo root — npm workspaces)
 
    ```bash
    pnpm install
    ```
 
-3. **Environment files**
+4. **Environment files**
 
    - Copy `backend/.env.example` → `backend/.env` and fill in all values (see [Environment variables](#environment-variables)).
   - Copy `frontend/.env.example` → `frontend/.env` and set `VITE_BASE_URL` to your API base URL (e.g. `http://localhost:5000/api/v1` when the backend runs on port 5000). Optionally set `VITE_SOCKET_URL` for real-time notifications; the frontend uses your logged-in access token to join the notification room.
 
    > Never commit `backend/.env` or `frontend/.env`. Only `.env.example` files belong in git.
 
-4. **First-Time Setup (Admin Seeding)**
+5. **First-Time Setup (Admin Seeding)**
 
    Before starting the server for the first time, you must create an admin user:
    
@@ -93,7 +97,7 @@
    
    Make sure `ADMIN_EMAIL` and `ADMIN_PASSWORD` are set in your `backend/.env` file.
 
-5. **Run apps**
+6. **Run apps**
 
    - **Both** (two terminals or one combined process):
 
@@ -104,7 +108,7 @@
    - **Backend only:** `pnpm dev:backend` — API (default port **5000** if `PORT` is unset).
    - **Frontend only:** `pnpm dev:frontend` — Vite dev server on **http://localhost:4001**
 
-6. **Production builds**
+7. **Production builds**
 
    ```bash
    npm run build
