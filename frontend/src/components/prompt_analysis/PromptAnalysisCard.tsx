@@ -69,6 +69,13 @@ const PromptAnalysisCard: React.FC<PromptAnalysisCardProps> = ({
     }
   }, [prompt, language, genre, tone, onAnalysisComplete]);
 
+  // Clear stale results when the prompt changes (e.g. navigating to a different story)
+  React.useEffect(() => {
+    setAnalysis(null);
+    setError(null);
+    setIsExpanded(false);
+  }, [prompt]);
+
   // Auto-analyze if enabled and prompt is provided
   React.useEffect(() => {
     if (autoAnalyze && prompt.trim() && !analysis && !isLoading) {

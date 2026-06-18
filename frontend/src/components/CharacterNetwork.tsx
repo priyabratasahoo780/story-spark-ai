@@ -33,7 +33,7 @@ interface CharacterNetworkProps {
 }
 
 const CharacterNetwork = ({ storyId }: CharacterNetworkProps) => {
-  const { data: networkData, isLoading, error, refetch } = useGetCharacterNetworkQuery(storyId);
+  const { data: networkData, isLoading, isFetching, error, refetch } = useGetCharacterNetworkQuery(storyId);
 
   // Filter States
   const [search, setSearch] = useState("");
@@ -46,6 +46,17 @@ const CharacterNetwork = ({ storyId }: CharacterNetworkProps) => {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // Reset all local state when the story changes to prevent stale data flash
+  useEffect(() => {
+    setSearch("");
+    setSelectedTypes([]);
+    setMinStrength(1);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setNodes([]);
+    setEdges([]);
+  }, [storyId, setNodes, setEdges]);
 
   // Clear filters
   const handleClearFilters = useCallback(() => {
@@ -207,7 +218,7 @@ const CharacterNetwork = ({ storyId }: CharacterNetworkProps) => {
     setSelectedEdgeId(null);
   }, []);
 
-  if (isLoading) {
+  if (isLoading || isFetching) {
     return (
       <div className="flex flex-col flex-1 items-center justify-center bg-[#101319] text-indigo-300 py-20">
         <i className="fas fa-spinner fa-spin text-3xl mb-3"></i>
