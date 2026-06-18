@@ -1,417 +1,282 @@
-const bcrypt = require("bcryptjs");
-
-import httpStatus from "http-status";
-import jwt, { Secret } from "jsonwebtoken";
-import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import { AuthModel } from "./auth.interface";
 import { User } from "../user/user.model";
-import { JwtHelpers } from "../../../utils/jwt.helper";
-import logger from "../../../utils/logger.util";
-import config from "../../../config";
-import ApiError from "../../../errors/api_error";
+import { AuthModel } from "./auth.interface";
 import { IUser } from "../user/user.interface";
-import { OTPModel } from "../verify_email/otp.model";
+import config from "../../../config";
+import redis from "../../../app/utils/redis.client";
+import ApiError from "../../../errors/api_error";
+import httpStatus from "http-status";
 import { RefreshSession } from "./refresh_session.model";
-import { VerifyEmailService } from "../verify_email/verify_email.service";
-import { GamificationService } from "../gamification/gamification.service";
-import { USER_STATUS } from "../../../enums/user_status";
-import { SUBSCRIPTION_TYPE } from "../../../enums/subscription_type";
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 const googleClient = new OAuth2Client(config.google_client_id);
 
-const validateUserStatus = (status?: string) => {
-  if (status === "Blocked") {
-    throw new ApiError(httpStatus.FORBIDDEN, "Your account has been blocked.");
-  }
-  if (status === "Inactive") {
-    throw new ApiError(httpStatus.FORBIDDEN, "Your account is inactive.");
-  }
-};
+const REFRESH_TOKEN_PREFIX = "refresh:";
 
-// Token claims; tokenVersion enables global session revocation.
-const buildClaims = (user: any) => ({
-  _id: user._id,
+/** Sign a short-lived access token */
+const signAccessToken = (payload: object): string =>
+  jwt.sign(payload, config.jwt.secret, {
+    expiresIn: (config.jwt.expires_in as any) ?? "15m",
+  });
+
+/** Sign a long-lived refresh token */
+const signRefreshToken = (payload: object): string =>
+  jwt.sign(payload, config.jwt.refresh_secret, {
+    expiresIn: (config.jwt.refresh_expires_in as any) ?? "30d",
+  });
+
+/** Build the JWT payload from a user document */
+const buildTokenPayload = (user: any) => ({
+  userId: user._id.toString(),
   email: user.email,
+  name: user.name,
   role: user.role,
   subscriptionType: user.subscriptionType,
-  name: user.name,
   postsCount: user.postsCount,
+  avatar: user.profile?.avatar ?? "",
   tokenVersion: user.tokenVersion ?? 0,
 });
 
-const issueAccessToken = (user: any, expiresIn?: string): string =>
-  JwtHelpers.createToken(
-    buildClaims(user),
-    config.jwt.secret as Secret,
-    expiresIn ?? (config.jwt.expires_in as string)
-  );
-
-// Issues a refresh token with a unique jti and records its session for rotation.
-const issueRefreshToken = async (user: any): Promise<string> => {
-  const jti = crypto.randomBytes(16).toString("hex");
-  const token = JwtHelpers.createToken(
-    { ...buildClaims(user), jti },
-    config.jwt.refresh_secret as Secret,
-    config.jwt.refresh_expires_in as string
-  );
-  const decoded = jwt.decode(token) as { exp?: number } | null;
-  const expiresAt = decoded?.exp
-    ? new Date(decoded.exp * 1000)
-    : new Date(Date.now() + 120 * 24 * 60 * 60 * 1000);
-  await RefreshSession.create({ jti, userId: user._id, expiresAt });
-  return token;
+/** Store refresh token in Redis with TTL matching token expiry (30 days) */
+const storeRefreshToken = async (userId: string, token: string) => {
+  const ttl = 30 * 24 * 60 * 60; // 30 days in seconds
+  await redis.set(`${REFRESH_TOKEN_PREFIX}${userId}`, token, "EX", ttl);
 };
 
-const login = async (payload: AuthModel & { rememberMe?: boolean }) => {
-  const { email: userEmail, password, rememberMe } = payload;
-  const isExistUser = await User.findOne({ email: userEmail });
-  if (!isExistUser) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found!");
-  }
-
-  validateUserStatus(isExistUser.status);
-
-  // Check if user has password (Google users might not)
-  if (!isExistUser.password) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, "Please use Google login for this account!");
-  }
-
-  const match = await bcrypt.compare(password, isExistUser.password);
-  if (!match) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, "Password is not valid!");
-  }
-
-  const accessToken = issueAccessToken(isExistUser, rememberMe ? "30d" : "15m");
-  const refreshToken = await issueRefreshToken(isExistUser);
-
-  GamificationService.updateDailyStreak(String(isExistUser._id)).catch(console.error);
-
-  return {
-    accessToken,
-    refreshToken,
-  };
+/** Remove refresh token from Redis */
+const deleteRefreshToken = async (userId: string) => {
+  await redis.del(`${REFRESH_TOKEN_PREFIX}${userId}`);
 };
 
-const register = async (payload: IUser & { verificationToken?: string; confirmPassword?: string }) => {
-  const { email: userEmail, verificationToken } = payload;
-  
-  if (!verificationToken) {
+// ─── Service ───────────────────────────────────────────────────────────────────
+
+const login = async (payload: AuthModel) => {
+  const { email, password } = payload;
+
+  const user = await User.findOne({ email }).select("+password");
+  if (!user) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Invalid email or password.");
+  }
+
+  if (!user.password) {
     throw new ApiError(
       httpStatus.UNAUTHORIZED,
-      "Email verification required. Please verify your email with OTP before registering."
+      "This account uses Google login. Please sign in with Google."
     );
   }
 
-  const otpRecord = await OTPModel.findOne({
-    email: userEmail,
-    isVerified: true,
-    verificationToken,
-  });
-
-  if (!otpRecord) {
-    throw new ApiError(
-      httpStatus.UNAUTHORIZED,
-      "Invalid or expired verification token. Please verify your email again."
-    );
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Invalid email or password.");
   }
 
-  if (
-    !otpRecord.verificationTokenExpires ||
-    new Date() > otpRecord.verificationTokenExpires
-  ) {
-    throw new ApiError(
-      httpStatus.UNAUTHORIZED,
-      "Verification token has expired. Please verify your email again."
-    );
+  if (user.status === "blocked") {
+    throw new ApiError(httpStatus.FORBIDDEN, "Your account has been blocked.");
   }
 
-  const isExistUser = await User.findOne({ email: userEmail });
-  if (isExistUser) {
-    throw new ApiError(httpStatus.CONFLICT, "User already exists!");
+  const tokenPayload = buildTokenPayload(user);
+  const accessToken = signAccessToken(tokenPayload);
+  const refreshToken = signRefreshToken({ userId: user._id.toString() });
+
+  await storeRefreshToken(user._id.toString(), refreshToken);
+
+  return { accessToken, refreshToken };
+};
+
+const register = async (payload: IUser) => {
+  const existing = await User.findOne({ email: payload.email });
+  if (existing) {
+    throw new ApiError(httpStatus.CONFLICT, "Email is already registered.");
   }
-  
-  const { verificationToken: _, ...userPayload } = payload;
-  const result = await User.create(userPayload);
 
-  // Clean up OTP record after successful registration
-  await OTPModel.deleteOne({ email: userEmail });
+  const user = await User.create(payload);
 
-  const accessToken = issueAccessToken(result);
-  const refreshToken = await issueRefreshToken(result);
+  const tokenPayload = buildTokenPayload(user);
+  const accessToken = signAccessToken(tokenPayload);
+  const refreshToken = signRefreshToken({ userId: user._id.toString() });
 
-  return {
-    accessToken,
-    refreshToken,
-  };
+  await storeRefreshToken(user._id.toString(), refreshToken);
+
+  return { accessToken, refreshToken };
 };
 
 const refreshToken = async (token: string) => {
   if (!token) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, "No refresh token provided");
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Refresh token is required.");
   }
 
-  let verifiedToken = null;
+  let decoded: any;
   try {
-    verifiedToken = JwtHelpers.verifyToken(
-      token,
-      config.jwt.refresh_secret as Secret
-    );
-  } catch (error) {
-    throw new ApiError(httpStatus.FORBIDDEN, "Invalid refresh token");
+    decoded = jwt.verify(token, config.jwt.refresh_secret);
+  } catch {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Invalid or expired refresh token.");
   }
 
-  const { email: userEmail } = verifiedToken;
-  const jti = (verifiedToken as any).jti as string | undefined;
-  const user = await User.findOne({ email: userEmail });
+  const userId = decoded.userId;
+
+  // Validate against Redis — ensures the token hasn't been rotated/invalidated
+  const stored = await redis.get(`${REFRESH_TOKEN_PREFIX}${userId}`);
+  if (!stored || stored !== token) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Refresh token has been revoked.");
+  }
+
+  const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found!");
+    throw new ApiError(httpStatus.UNAUTHORIZED, "User not found.");
   }
 
-  if (user.tokenVersion !== (verifiedToken as any).tokenVersion) {
-    throw new ApiError(
-      httpStatus.UNAUTHORIZED,
-      "Invalid or expired refresh token"
-    );
+  if (user.status === "blocked") {
+    throw new ApiError(httpStatus.FORBIDDEN, "Your account has been blocked.");
   }
 
-  if (!jti) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, "Invalid refresh token");
-  }
+  // Rotate: issue new pair, invalidate old refresh token
+  const tokenPayload = buildTokenPayload(user);
+  const accessToken = signAccessToken(tokenPayload);
+  const newRefreshToken = signRefreshToken({ userId: user._id.toString() });
 
-  const session = await RefreshSession.findOne({ jti });
-  if (!session || session.revoked) {
-    throw new ApiError(
-      httpStatus.UNAUTHORIZED,
-      "Invalid or expired refresh token"
-    );
-  }
+  await storeRefreshToken(userId, newRefreshToken);
 
-  // Reuse of an already-used token signals theft: revoke the family and bump tokenVersion.
-  if (session.used) {
-    await RefreshSession.updateMany({ userId: user._id }, { revoked: true });
-    await User.updateOne({ _id: user._id }, { $inc: { tokenVersion: 1 } });
-    throw new ApiError(
-      httpStatus.UNAUTHORIZED,
-      "Refresh token reuse detected. Please sign in again."
-    );
-  }
-
-  // Atomically claim the token so only one concurrent request can rotate it.
-  const claimed = await RefreshSession.findOneAndUpdate(
-    { jti, used: false, revoked: false },
-    { used: true },
-    { new: true }
-  );
-  if (!claimed) {
-    throw new ApiError(
-      httpStatus.UNAUTHORIZED,
-      "Invalid or expired refresh token"
-    );
-  }
-
-  const accessToken = issueAccessToken(user);
-  const newRefreshToken = await issueRefreshToken(user);
-  return {
-    accessToken,
-    refreshToken: newRefreshToken,
-  };
+  return { accessToken, refreshToken: newRefreshToken };
 };
 
-const logout = async (token?: string) => {
+const logout = async (token: string) => {
   if (!token) return;
+
   try {
-    const verified = JwtHelpers.verifyToken(
-      token,
-      config.jwt.refresh_secret as Secret
-    );
-    const jti = (verified as any).jti as string | undefined;
-    const userId = (verified as any)._id as string | undefined;
-
-    // Revoke the refresh token session.
-    if (jti) {
-      await RefreshSession.updateOne({ jti }, { revoked: true });
-    }
-
-    // Bump tokenVersion so every outstanding access token for this user is
-    // immediately rejected by auth.middleware.ts, even before its natural expiry.
-    if (userId) {
-      await User.updateOne({ _id: userId }, { $inc: { tokenVersion: 1 } });
-    }
-  } catch (error) {
-    // Ignore invalid tokens on logout; the cookie is cleared either way.
+    const decoded: any = jwt.verify(token, config.jwt.refresh_secret);
+    await deleteRefreshToken(decoded.userId);
+  } catch {
+    // Token already invalid — nothing to clean up
   }
 };
 
-const googleLogin = async (payload: { token: string }) => {
-  try {
-    if (!config.google_client_id) {
-      throw new ApiError(
-        httpStatus.INTERNAL_SERVER_ERROR,
-        "Google OAuth not configured"
-      );
-    }
+const googleLogin = async (payload: { credential: string }) => {
+  const { credential } = payload;
 
-    const ticket = await googleClient.verifyIdToken({
-      idToken: payload.token,
+  if (!credential) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Google credential is required.");
+  }
+
+  let ticket: any;
+  try {
+    ticket = await googleClient.verifyIdToken({
+      idToken: credential,
       audience: config.google_client_id,
     });
-
-    const payload_data = ticket.getPayload();
-    if (!payload_data || !payload_data.email) {
-      throw new ApiError(httpStatus.BAD_REQUEST, "Invalid Google token");
-    }
-
-    if (!payload_data.email_verified) {
-      throw new ApiError(httpStatus.UNAUTHORIZED, "Google email is not verified");
-    }
-
-    const { email, name: googleName, picture } = payload_data;
-    let user = await User.findOne({ email });
-
-    if (!user) {
-      const newUser: Partial<IUser> = {
-        email: email as string,
-        name: (googleName || email || "Google User").slice(0, 100),
-        status: "Active",
-        subscriptionType: "free",
-        profile: {
-          avatar: (picture as string) || "",
-          bio: "",
-          social: {
-            facebook: "",
-            twitter: "",
-            linkedin: "",
-            instagram: "",
-            github: "",
-            discord: "",
-          },
-        },
-      };
-
-
-    const payload_data = ticket.getPayload();
-    if (!payload_data || !payload_data.email) {
-      throw new ApiError(httpStatus.BAD_REQUEST, "Invalid Google token");
-    }
-
-    if (!payload_data.email_verified) {
-      throw new ApiError(httpStatus.UNAUTHORIZED, "Google email is not verified");
-    }
-
-    const { email, name: googleName, picture } = payload_data;
-    let user = await User.findOne({ email });
-
-    if (!user) {
-      const newUser: Partial<IUser> = {
-        email: email as string,
-        name: (googleName || email || "Google User").slice(0, 100),
-        status: "Active",
-        subscriptionType: "free",
-        profile: {
-          avatar: (picture as string) || "",
-          bio: "",
-          social: {
-            facebook: "",
-            twitter: "",
-            linkedin: "",
-            instagram: "",
-          },
-        },
-      };
-
-      user = await User.create(newUser);
-    }
-
-    validateUserStatus(user.status);
-
-    const accessToken = issueAccessToken(user);
-    const refreshTokenData = await issueRefreshToken(user);
-
-    GamificationService.updateDailyStreak(String(user._id)).catch(console.error);
-
-    return {
-      accessToken,
-      refreshToken: refreshTokenData,
-    };
-  } catch (error: any) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error(`Google login error: ${errorMessage}`);
-    
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    
-    throw new ApiError(
-      httpStatus.UNAUTHORIZED,
-      error.message || "Google login failed"
-    );
+  } catch {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Invalid Google credential.");
   }
-};
 
-const changePassword = async (userPayload: any, payload: any) => {
-  const { oldPassword, newPassword } = payload;
-  const user = await User.findById(userPayload._id);
+  const googlePayload = ticket.getPayload();
+  if (!googlePayload?.email) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Could not retrieve email from Google.");
+  }
+
+  let user = await User.findOne({ email: googlePayload.email });
 
   if (!user) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
+    // Auto-register Google users
+    user = await User.create({
+      email: googlePayload.email,
+      name: googlePayload.name ?? googlePayload.email.split("@")[0],
+      role: "user",
+      status: "active",
+      subscriptionType: "free",
+      postsCount: 0,
+      followers: [],
+      following: [],
+      posts: [],
+      isApplyForWriter: false,
+      profile: {
+        avatar: googlePayload.picture ?? "",
+        bio: "",
+        social: {
+          facebook: "",
+          twitter: "",
+          linkedin: "",
+          instagram: "",
+          github: "",
+          discord: "",
+        },
+      },
+      writingGoals: { dailyWordCount: 0, weeklyWordCount: 0 },
+      gamification: {
+        xp: 0,
+        level: 1,
+        streak: 0,
+        lastActiveDate: null,
+        badges: [],
+      },
+      writingStreak: {
+        currentStreak: 0,
+        longestStreak: 0,
+        lastActiveDate: null,
+        totalWritingDays: 0,
+      },
+    });
+  }
+
+  if (user.status === "blocked") {
+    throw new ApiError(httpStatus.FORBIDDEN, "Your account has been blocked.");
+  }
+
+  const tokenPayload = buildTokenPayload(user);
+  const accessToken = signAccessToken(tokenPayload);
+  const refreshToken = signRefreshToken({ userId: user._id.toString() });
+
+  await storeRefreshToken(user._id.toString(), refreshToken);
+
+  return { accessToken, refreshToken };
+};
+
+const changePassword = async (
+  userInfo: { userId: string; tokenVersion?: number },
+  payload: { oldPassword: string; newPassword: string }
+) => {
+  const { oldPassword, newPassword } = payload;
+
+  const user = await User.findById(userInfo.userId).select("+password");
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User not found.");
   }
 
   if (!user.password) {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
-      "User does not have a password set"
+      "Password change is not available for Google accounts."
     );
   }
 
-  const isPasswordMatch = await bcrypt.compare(oldPassword, user.password);
-  if (!isPasswordMatch) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, "Old password is incorrect");
+  const isMatch = await bcrypt.compare(oldPassword, user.password);
+  if (!isMatch) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Old password is incorrect.");
   }
 
-  user.password = newPassword;
-
-  if (user.tokenVersion !== undefined) {
-    user.tokenVersion += 1;
-  } else {
-    user.tokenVersion = 1;
-  }
+  user.password = newPassword; // pre-save hook will hash it
+  user.tokenVersion = (user.tokenVersion ?? 0) + 1; // invalidate all existing sessions
   await user.save();
+
+  // Revoke refresh token — user must log in again
+  await deleteRefreshToken(user._id.toString());
 };
+
 const forgotPassword = async (email: string) => {
-  if (!email) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Email is required!");
-  }
-
-  // Same response for real and unknown emails to prevent account enumeration.
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
   const user = await User.findOne({ email });
-  if (user) {
-    // Fire and forget so response timing does not vary with account existence.
-    VerifyEmailService.VerifyEmail({
-      email: user.email,
-      name: user.name || "User",
-    }).catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error(`forgotPassword OTP send failed for ${user.email}: ${message}`);
-    });
-  }
+  // Always return success to prevent email enumeration
+  if (!user) return null;
 
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const ttl = 10 * 60; // 10 minutes
 
-  const user = await User.findOne({ email });
-  if (user) {
-    // Fire and forget so response timing does not vary with account existence.
-    VerifyEmailService.VerifyEmail({
-      email: user.email,
-      name: user.name || "User",
-    }).catch((err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error(`forgotPassword OTP send failed for ${user.email}: ${message}`);
-    });
-  }
+  await redis.set(`otp:${email}`, otp, "EX", ttl);
 
-  return { expiresAt };
+  // TODO: wire up email sending (nodemailer / SendGrid / etc.)
+  // await sendEmail({ to: email, subject: "Your OTP", text: `Your OTP is ${otp}` });
+
+  return null;
 };
 
 const resetPassword = async (payload: {
@@ -421,92 +286,39 @@ const resetPassword = async (payload: {
   verificationToken: string;
 }) => {
   const { email, password, confirmPassword, verificationToken } = payload;
-  if (!email || !password || !confirmPassword || !verificationToken) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "All fields are required!");
-  }
+
   if (password !== confirmPassword) {
-    throw new ApiError(httpStatus.BAD_REQUEST, "Passwords do not match!");
-  }
-  
-  const getPasswordError = (pwd: string) => {
-    if (pwd.length < 8) return "Password must be at least 8 characters long";
-    if (!/[A-Z]/.test(pwd)) return "Password must contain at least one uppercase letter";
-    if (!/[a-z]/.test(pwd)) return "Password must contain at least one lowercase letter";
-    if (!/[0-9]/.test(pwd)) return "Password must contain at least one number";
-    if (!/[^A-Za-z0-9]/.test(pwd)) return "Password must contain at least one special character";
-    return "";
-  };
-  const passwordError = getPasswordError(password);
-  if (passwordError) {
-    throw new ApiError(httpStatus.BAD_REQUEST, passwordError);
+    throw new ApiError(httpStatus.BAD_REQUEST, "Passwords do not match.");
   }
 
-  const user = await User.findOne({ email });
+  const storedOtp = await redis.get(`otp:${email}`);
+  if (!storedOtp || storedOtp !== verificationToken) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Invalid or expired OTP.");
+  }
+
+  const user = await User.findOne({ email }).select("+password");
   if (!user) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found!");
+    throw new ApiError(httpStatus.NOT_FOUND, "User not found.");
   }
 
-  const otpRecord = await OTPModel.findOne({
-    email,
-    isVerified: true,
-    verificationToken,
-  });
-
-  if (!otpRecord) {
-    throw new ApiError(
-      httpStatus.UNAUTHORIZED,
-      "Invalid or expired verification token. Please verify your email again."
-    );
-  }
-
-  if (
-    !otpRecord.verificationTokenExpires ||
-    new Date() > otpRecord.verificationTokenExpires
-  ) {
-    throw new ApiError(
-      httpStatus.UNAUTHORIZED,
-      "Verification token has expired. Please verify your email again."
-    );
-  }
-
-  // Bump tokenVersion and revoke sessions so the reset invalidates old logins.
-  user.password = password;
+  user.password = password; // pre-save hook hashes it
   user.tokenVersion = (user.tokenVersion ?? 0) + 1;
   await user.save();
-  await RefreshSession.updateMany({ userId: user._id }, { revoked: true });
 
-  // Clean up OTP record
-  await OTPModel.deleteOne({ email });
+  // Clear OTP and any existing refresh token
+  await redis.del(`otp:${email}`);
+  await deleteRefreshToken(user._id.toString());
 
-  // Generate JWT tokens for auto-login with the new tokenVersion.
-  const accessToken = issueAccessToken(user);
-  const refreshToken = await issueRefreshToken(user);
+  const tokenPayload = buildTokenPayload(user);
+  const accessToken = signAccessToken(tokenPayload);
+  const refreshToken = signRefreshToken({ userId: user._id.toString() });
 
-  return {
-    accessToken,
-    refreshToken,
-  };
+  await storeRefreshToken(user._id.toString(), refreshToken);
+
+  return { accessToken, refreshToken };
 };
 
-
-  // Bump tokenVersion and revoke sessions so the reset invalidates old logins.
-  user.password = password;
-  user.tokenVersion = (user.tokenVersion ?? 0) + 1;
-  await user.save();
-  await RefreshSession.updateMany({ userId: user._id }, { revoked: true });
-
-  // Clean up OTP record
-  await OTPModel.deleteOne({ email });
-
-  // Generate JWT tokens for auto-login with the new tokenVersion.
-  const accessToken = issueAccessToken(user);
-  const refreshToken = await issueRefreshToken(user);
-
-  return {
-    accessToken,
-    refreshToken,
-  };
-};
+// ─── Exports ───────────────────────────────────────────────────────────────────
 
 export const AuthService = {
   login,
@@ -517,5 +329,4 @@ export const AuthService = {
   changePassword,
   forgotPassword,
   resetPassword,
-};
 };
