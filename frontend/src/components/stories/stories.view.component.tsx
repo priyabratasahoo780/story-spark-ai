@@ -598,6 +598,7 @@ const StoriesViewComponent: React.FC<StoriesComponentProps> = ({
     lastSavedContentRef.current = "";
     hasSavedSessionRef.current = false;
     savedPostIdRef.current = null;
+    setTopics(topicsData);
   }, [stories]);
 
   useEffect(() => {
