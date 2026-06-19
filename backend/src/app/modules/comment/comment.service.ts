@@ -1,11 +1,13 @@
 import ApiError from "../../../errors/api_error";
 import { ITokenPayload } from "../../../interfaces/token";
 import { User } from "../user/user.model";
-import { IComment, ICommentDTO, ICommentPayload, ILeanComment } from "./comment.interface";
+import { IComment, ICommentPayload } from "./comment.interface";
 import httpStatus from "http-status";
 import { Comment } from "./comment.model";
-import { Types } from "mongoose";
+import { startSession, Types } from "mongoose";
 import { Post } from "../post/post.model";
+import { ENUM_USER_ROLE } from "../../../enums/user";
+import { assertContentSafe } from "../../../utils/contentModeration";
 
 const createComment = async (
   payload: ICommentPayload,
@@ -23,63 +25,75 @@ const createComment = async (
   if (!post) {
     throw new ApiError(httpStatus.BAD_REQUEST, "Post not found!");
   }
-  // Use an atomic $inc update instead of the read-modify-write pattern.
-  // With concurrent requests, both would read the same commentsCount value
-  // and both would write count + 1, losing one increment per race.
-  // findByIdAndUpdate with $inc is a single atomic MongoDB operation.
-  await Post.findByIdAndUpdate(post._id, { $inc: { commentsCount: 1 } });
-  const commentData: Omit<IComment, "parentCommentId"> = {
-    postId: new Types.ObjectId(payload.postId),
-    userId: user._id,
-    comment: payload.comment,
-  };
-  if (payload.parentCommentId) {
-    (commentData as IComment).parentCommentId = new Types.ObjectId(
-      payload.parentCommentId
-    );
+
+  // Content moderation — block inappropriate comments before persisting
+  try {
+    assertContentSafe(payload.comment);
+  } catch (moderationError) {
+    const msg = moderationError instanceof Error ? moderationError.message : "Comment blocked by content moderation.";
+    throw new ApiError(httpStatus.UNPROCESSABLE_ENTITY, msg);
   }
-  const res = await Comment.create(commentData);
-  return res;
-};
 
-const getCommentsByPostId = async (postId: string) => {
-  const allComments = (await Comment.find({ postId })
-    .populate("userId", "name email")
-    .populate("likes")
-    .sort({ createdAt: -1 })
-    .lean()) as any[];
-
-  const totalComments = allComments.length;
-
-  const topLevelComments: any[] = [];
-  const replyMap = new Map<string, any[]>();
-
-  // Distribute comments into top-level list and replies map
-  for (const comment of allComments) {
-    if (!comment.parentCommentId) {
-      comment.replies = [];
-      topLevelComments.push(comment);
-    } else {
-      const parentIdStr = comment.parentCommentId.toString();
-      if (!replyMap.has(parentIdStr)) {
-        replyMap.set(parentIdStr, []);
-      }
-      replyMap.get(parentIdStr)!.push(comment);
+  // Validate parent comment if parentCommentId is provided
+  if (payload.parentCommentId) {
+    if (!Types.ObjectId.isValid(payload.parentCommentId)) {
+      throw new ApiError(httpStatus.BAD_REQUEST, "Invalid parentCommentId");
+    }
+    const parentComment = await Comment.findOne({
+      _id: payload.parentCommentId,
+      postId: payload.postId,
+    });
+    if (!parentComment) {
+      throw new ApiError(
+        httpStatus.NOT_FOUND,
+        "Parent comment not found for this post!"
+      );
+    }
+    if (parentComment.parentCommentId) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        "Replies can only be added to top-level comments!"
+      );
     }
   }
 
-  // Attach replies to their corresponding top-level comments and sort them chronologically (createdAt: 1)
-  for (const comment of topLevelComments) {
-    const idStr = comment._id.toString();
-    const replies = replyMap.get(idStr) || [];
-    // Sort replies in ascending chronological order
-    replies.sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-    comment.replies = replies;
-  }
+  const session = await startSession();
+  try {
+    session.startTransaction();
 
-  return { comments: topLevelComments, totalComments };
+    const updateResult = await Post.updateOne(
+      { _id: post._id, isDeleted: { $ne: true } },
+      { $inc: { commentsCount: 1 } },
+      { session }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      throw new ApiError(httpStatus.NOT_FOUND, "Post not found!");
+    }
+
+    const commentData: any = {
+      postId: new Types.ObjectId(payload.postId),
+      userId: user._id,
+      comment: payload.comment,
+    };
+    if (payload.parentCommentId) {
+      commentData.parentCommentId = new Types.ObjectId(payload.parentCommentId);
+    }
+
+    const res = await Comment.create([commentData], { session });
+
+    await session.commitTransaction();
+    await session.endSession();
+    return res[0];
+  } catch (error) {
+    await session.abortTransaction();
+    await session.endSession();
+    throw error;
+  }
+};
+
+const getCommentsByPostId = async (postId: string) => {
+  return await Comment.find({ postId }).populate("userId", "name profile.avatar").sort({ createdAt: -1 });
 };
 
 const toggleCommentLike = async (commentId: string, token: ITokenPayload) => {
@@ -99,16 +113,8 @@ const toggleCommentLike = async (commentId: string, token: ITokenPayload) => {
   if (!post) {
     throw new ApiError(httpStatus.NOT_FOUND, "Post not found!");
   }
-
+  
   // Replace the read-modify-write likes toggle with atomic MongoDB operators.
-  // The original pattern read likes, checked membership with includes, mutated
-  // the array, and saved. Two concurrent toggles by the same user can both pass
-  // the includes check (both see the ID absent), both push, and both save,
-  // resulting in a duplicate like entry.
-  //
-  // $addToSet adds the user ID only if it is not already present (like).
-  // $pull removes all matching entries (unlike). Both are atomic.
-  // Checking the current state first determines which operation to perform.
   const isCurrentlyLiked = await Comment.exists({
     _id: comment._id,
     likes: user._id,
@@ -124,8 +130,36 @@ const toggleCommentLike = async (commentId: string, token: ITokenPayload) => {
   return updatedComment;
 };
 
+const deleteComment = async (commentId: string, token: ITokenPayload) => {
+  const { _id, email, role } = token;
+  const user = _id ? await User.findById(_id) : await User.findOne({ email });
+  if (!user) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "User not found!");
+  }
+  const comment = await Comment.findById(commentId);
+  if (!comment) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Comment not found!");
+  }
+  // Only the comment author or an admin/super-admin can delete
+  const isAuthor = comment.userId.toString() === user._id.toString();
+  const isAdmin = role === ENUM_USER_ROLE.ADMIN || role === ENUM_USER_ROLE.SUPER_ADMIN;
+  if (!isAuthor && !isAdmin) {
+    throw new ApiError(
+      httpStatus.FORBIDDEN,
+      "You are not authorized to delete this comment!"
+    );
+  }
+  await Comment.findByIdAndDelete(commentId);
+  // Decrement commentsCount on the post atomically
+  await Post.findByIdAndUpdate(comment.postId, {
+    $inc: { commentsCount: -1 },
+  });
+  return { message: "Comment deleted successfully!" };
+};
+
 export const CommentService = {
   createComment,
   getCommentsByPostId,
   toggleCommentLike,
+  deleteComment,
 };

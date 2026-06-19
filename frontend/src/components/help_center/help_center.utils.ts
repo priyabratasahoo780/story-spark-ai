@@ -1,5 +1,6 @@
 // FAQ Structure
 export interface FAQItem {
+  id: string;
   question: string;
   answer: string;
   keywords: string[]; // Strict type array prevents TS2488 Spread Iterator crash
@@ -45,11 +46,13 @@ export interface TroubleshootItem {
 // Data Sets
 export const FAQ_ITEMS: FAQItem[] = [
   {
+    id: "faq-generate-stories",
     question: "How does StorySparkAI generate stories?",
     answer: "StorySparkAI uses advanced language models to interpret your prompt, style preferences, and narrative depth parameters to build a cohesive text layout structure automatically.",
     keywords: ["generate", "story", "ai", "how"]
   },
   {
+    id: "faq-export-stories",
     question: "Can I export my stories?",
     answer: "Yes, you can save and export your generated works into Markdown formatting or plain text documents directly from your workspace dashboard panel.",
     keywords: ["export", "download", "markdown", "save"]
@@ -96,7 +99,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
     title: "Account & Billing",
     description: "Manage your profile settings, subscriptions, and security options.",
     icon: "fa-solid fa-user-gear",
-    sectionId: "account-billing-section", 
+    sectionId: "account-billing-section",
     keywords: ["profile", "password", "billing", "subscription", "plan"]
   },
   {
@@ -109,6 +112,15 @@ export const HELP_CATEGORIES: HelpCategory[] = [
   }
 ];
 
+<<<<<<< HEAD
+=======
+// CORRECTED MAPPING: Changed 'title' to 'label' so the sidebar reads it correctly
+export const HELP_SECTIONS = HELP_CATEGORIES.map(category => ({
+  id: category.id,
+  title: category.title,
+  description: category.description,
+}));
+>>>>>>> d8f93186 (Resoved Error)
 export const TROUBLESHOOT_ITEMS: TroubleshootItem[] = [
   {
     id: "connection-lost",
@@ -119,6 +131,23 @@ export const TROUBLESHOOT_ITEMS: TroubleshootItem[] = [
     solution: "Verify your local network availability, clear application session storage, or recreate the workspace instance.",
     keywords: ["network", "socket", "disconnect", "collab", "freeze"]
   }
+];
+<<<<<<< HEAD
+
+export type FaqItem = FAQItem;
+export type SupportLink = Support_Links;
+
+export interface HelpSection {
+  id: string;
+  label: string;
+}
+
+export const HELP_SECTIONS: HelpSection[] = [
+  { id: "help-categories", label: "Categories" },
+  { id: "troubleshoot-section", label: "Troubleshooting" },
+  { id: "faq-section", label: "FAQ" },
+  { id: "developer-setup", label: "Setup Guide" },
+  { id: "support-links-section", label: "Support" },
 ];
 
 export const scrollToSection = (id: string) => {
@@ -133,3 +162,5 @@ export const matchesSearch = (query: string, fields: string[]): boolean => {
   const lowerQuery = query.toLowerCase();
   return fields.some(field => field?.toLowerCase().includes(lowerQuery));
 };
+=======
+>>>>>>> d8f93186 (Resoved Error)
