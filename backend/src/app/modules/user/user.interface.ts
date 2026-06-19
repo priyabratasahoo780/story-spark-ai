@@ -11,6 +11,9 @@ export interface IUser {
   role: string;
   status: string;
   subscriptionType: SubscriptionType;
+  subscriptionExpiry?: Date;
+  lastPaymentId?: string;
+  lastOrderId?: string;
   postsCount: number;
   followers: Types.ObjectId[];
   following: Types.ObjectId[];
@@ -37,6 +40,12 @@ export interface IUser {
     streak: number;
     lastActiveDate: Date | null;
     badges: string[];
+  };
+  writingStreak: {
+    currentStreak: number;
+    longestStreak: number;
+    lastActiveDate: Date | null;
+    totalWritingDays: number;
   };
   readingPreferences?: {
     favoriteGenres: { name: string; count: number }[];
