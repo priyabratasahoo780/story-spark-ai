@@ -9,11 +9,8 @@ export const searchRateLimiter = rateLimit({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    success: false,
-    message: "Too many search requests. Please wait a moment and try again.",
-  },
-  keyGenerator: (req) => {
+  message: "Too many search requests. Please wait a moment and try again.",
+  keyGenerator: (req: Request) => {
     // Prefer real IP behind proxy (trust proxy is set in app.ts)
     return (
       (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
