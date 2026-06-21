@@ -14,24 +14,32 @@ type JwtVerifiedUser = {
   role?: string;
 };
 
-
 const extractBearerToken = (authHeader: string): string => {
   if (!authHeader) return "";
-  if (!authHeader.startsWith("Bearer ")) return "";
-
+  if (!authHeader.startsWith("Bearer ")) {
+    throw new ApiError(
+      httpStatus.UNAUTHORIZED,
+      "Authorization header must use Bearer scheme"
+    );
+  }
   return authHeader.slice("Bearer ".length).trim();
 };
 
 const extractTokenFromRequest = (req: Request): string => {
-  const authHeader = Array.isArray(req.headers.authorization)
-    ? req.headers.authorization[0]
-    : req.headers.authorization;
+  const authHeader = req.headers.authorization;
+
+  if (Array.isArray(authHeader)) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Invalid authorization header format"
+    );
+  }
 
   const bearerToken = extractBearerToken(authHeader ?? "");
 
-  // Support both header-based and cookie-based tokens.
-  const cookieToken =
-    (req as any).cookies?.accessToken || (req as any).cookies?.token;
+  // Support both header-based and cookie-based tokens safely.
+  const cookies = req.cookies as Record<string, string> | undefined;
+  const cookieToken = cookies?.accessToken || cookies?.token;
 
   return bearerToken || cookieToken || "";
 };
@@ -48,13 +56,18 @@ const auth = (...requiredRole: string[]) =>
         );
       }
 
-      const verified = JwtHelpers.verifyToken(
-        token,
-        config.jwt.secret as Secret
-      ) as unknown as JwtVerifiedUser;
+      let verified: JwtVerifiedUser;
+      try {
+        verified = JwtHelpers.verifyToken(
+          token,
+          config.jwt.secret as Secret
+        ) as unknown as JwtVerifiedUser;
+      } catch (err) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, "Invalid or expired token");
+      }
 
       if (!verified?._id) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, "User not found");
+        throw new ApiError(httpStatus.UNAUTHORIZED, "User not found in token");
       }
 
       // Ensure this exact token string is not blacklisted.
@@ -99,7 +112,7 @@ const auth = (...requiredRole: string[]) =>
         }
       }
 
-      (req as any).user = user;
+      req.user = user as any;
       return next();
     } catch (err) {
       return next(err);
@@ -107,5 +120,4 @@ const auth = (...requiredRole: string[]) =>
   };
 
 export default auth;
-
 
