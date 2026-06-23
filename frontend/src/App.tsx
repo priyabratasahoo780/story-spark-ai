@@ -79,11 +79,11 @@ const lazyPage = (element: React.ReactElement) => (
 const router = createBrowserRouter([
   {
     element: (
-      <>
+      <RootLayout>
         <ScrollToTop />
         <PageTitleUpdater />
         <Outlet />
-      </>
+      </RootLayout>
     ),
     children: [
       { index: true, element: <><HeroSectionComponent /><HomeComponent /></> },
