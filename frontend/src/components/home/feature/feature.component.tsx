@@ -1,6 +1,7 @@
 import { Post } from "../../../models/post";
 import { useGetFeaturedListsQuery } from "../../../redux/apis/post.api";
 import { formatDateShort } from "../../../utils/time-formate";
+import { calculateReadingTime } from "../../../utils/reading-time";
 import LoadingAnimation from "../../loading/loading.component";
 import SSProfile from "../../ui-component/ss-profile/ss-profile";
 import { useNavigate } from "react-router-dom";
@@ -16,11 +17,6 @@ const FeatureComponent = () => {
   const navigate = useNavigate();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const calculateReadingTime = (content: string): number => {
-    if (!content) return 1;
-    const words = content.trim().split(/\s+/).length;
-    return Math.max(1, Math.ceil(words / 200));
-  };
 
   const handleCopyLink = (e: React.MouseEvent, postId: string, postUrl: string) => {
     e.stopPropagation();
@@ -61,7 +57,7 @@ const FeatureComponent = () => {
       </h2>
 
       {posts.length > 0 ? (
-        <div className="flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory md:grid md:grid-cols-2 md:gap-8 md:overflow-visible md:pb-0 xl:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 md:gap-8 lg:grid-cols-3">
           {posts.map((post: Post) => {
             const postUrl = `${window.location.origin}/post/${post._id}`;
 
